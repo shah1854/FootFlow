@@ -134,6 +134,16 @@ def main(season, all_time_stat_path, season_stat_path):
                 # make sure window is maximized
                 driver.maximize_window()
                 time.sleep(3)
+                # get all of the clubs the player has played for
+                club_seasons = driver.find_elements(By.CLASS_NAME, "player-club-history__season") # start from index 1
+                club_names = driver.find_elements(By.CSS_SELECTOR, "span[class='player-club-history__team-name player-club-history__team-name--long']")
+                club_info = {}
+                for i in range(len(club_names)):
+                    club_season = club_seasons[i+1].text
+                    # Creating the desired format '2005/06'
+                    club_season = f"{club_season[:4]}/{club_season[-2:]}"
+                    name = club_names[i].text
+                    club_info[club_season] = name 
                 if player_name not in existing_all_time_player_names: # get all time stats from overview and stats page
                     print("adding all time stats for " + player_name)
                     try:
@@ -170,16 +180,6 @@ def main(season, all_time_stat_path, season_stat_path):
                         if block.text in positions:
                             position = block.text
                             break
-                    club_seasons = driver.find_elements(By.CLASS_NAME, "player-club-history__season") # start from index 1
-                    club_names = driver.find_elements(By.CSS_SELECTOR, "span[class='player-club-history__team-name player-club-history__team-name--long']")
-                    club_info = {}
-                    for i in range(len(club_names)):
-                        club_season = club_seasons[i+1].text
-                        # Creating the desired format '2005/06'
-                        club_season = f"{club_season[:4]}/{club_season[-2:]}"
-                        name = club_names[i].text
-                        club_info[club_season] = name
-                    time.sleep(3)    
                     try:
                         WebDriverWait(driver, 10).until(
                         EC.element_to_be_clickable((By.CSS_SELECTOR, "a[data-text='Stats']"))).click()
@@ -190,84 +190,60 @@ def main(season, all_time_stat_path, season_stat_path):
                         continue
                     time.sleep(5)
                     # SCRAPING ALL TIME STATS
-                    # bio
-                    appearances = check_if_elem_exists("appearances")
-                    # attack
-                    goals = check_if_elem_exists("goals")
-                    goals_per_game = round(goals/appearances, 2)
-                    att_hd_goal = check_if_elem_exists("att_hd_goal")
-                    att_rf_goal = check_if_elem_exists("att_rf_goal")
-                    att_lf_goal = check_if_elem_exists("att_lf_goal")
-                    att_pen_goal = check_if_elem_exists("att_pen_goal")
-                    att_freekick_goal = check_if_elem_exists("att_freekick_goal")
-                    total_scoring_att = check_if_elem_exists("total_scoring_att")
-                    ontarget_scoring_att = check_if_elem_exists("ontarget_scoring_att")
-                    if total_scoring_att == -1.0 or ontarget_scoring_att == -1.0:
-                        ontarget_per = -1.0
-                    elif total_scoring_att == 0:
-                        ontarget_per = 0.0
-                    else:
-                        ontarget_per = round(ontarget_scoring_att/total_scoring_att * 100.0, 2)
-                    hit_woodwork = check_if_elem_exists("hit_woodwork")
-                    big_chance_missed = check_if_elem_exists("big_chance_missed")
-                    # team stats
-                    wins = check_if_elem_exists('wins')
-                    losses = check_if_elem_exists('losses')
-                    goal_assists = check_if_elem_exists("goal_assist")
-                    total_pass = check_if_elem_exists("total_pass")
-                    if appearances == -1.0 or total_pass == -1.0:
-                        passes_per_match = -1.0
-                    else:
-                        passes_per_match = round(total_pass/appearances, 2)
-                    big_chance_created = check_if_elem_exists("big_chance_created")
-                    total_cross = check_if_elem_exists("total_cross")
-                    cross_accuracy = check_if_elem_exists("accurate_crosses")
-                    #discipline
-                    yellow_card = check_if_elem_exists('yellow_card')
-                    red_card = check_if_elem_exists('red_card')
-                    fouls = check_if_elem_exists('fouls')
-                    total_offside = check_if_elem_exists('total_offside')
-                    #defense
-                    total_tackle = check_if_elem_exists('total_tackle')
-                    won_tackle = check_if_elem_exists('won_tackle')
-                    blocked_scoring_att = check_if_elem_exists('blocked_scoring_att')
-                    interception = check_if_elem_exists('interception')
-                    total_clearance = check_if_elem_exists('total_clearance')
-                    effective_head_clearance = check_if_elem_exists("effective_head_clearance")
-                    ball_recovery = check_if_elem_exists("ball_recovery")
-                    duel_won = check_if_elem_exists("duel_won")
-                    duel_lost = check_if_elem_exists("duel_lost")
-                    won_contest = check_if_elem_exists("won_contest")
-                    aerial_won = check_if_elem_exists("aerial_won")
-                    aerial_lost = check_if_elem_exists("aerial_lost")
-                    error_lead_to_goal = check_if_elem_exists("error_lead_to_goal")
-                    # goalkeeping
-                    saves = check_if_elem_exists("saves")
-                    penalty_save = check_if_elem_exists("penalty_save")
-                    punches = check_if_elem_exists("punches")
-                    good_high_claim = check_if_elem_exists('good_high_claim')
-                    stand_catch_dive_catch = check_if_elem_exists('stand_catch,dive_catch')
-                    total_keeper_sweeper = check_if_elem_exists('total_keeper_sweeper')
-                    keeper_throws = check_if_elem_exists('keeper_throws')
-                    goal_kicks = check_if_elem_exists("goal_kicks")
                     with open(all_time_stat_path, mode='a', newline='', encoding='utf-8') as file:
                         all_time_stat_writer = csv.writer(file)
                         all_time_stat_writer.writerow([
-                        player_name, player_number, player_image, 
-                        nationality, dob, age, height, position, club_info,
-                        appearances, goals, goals_per_game, att_hd_goal, 
-                        att_rf_goal, att_lf_goal, att_pen_goal, att_freekick_goal, 
-                        total_scoring_att, ontarget_scoring_att, ontarget_per, 
-                        hit_woodwork, big_chance_missed, wins, losses, goal_assists, total_pass, 
-                        passes_per_match, big_chance_created, total_cross, cross_accuracy, yellow_card, 
-                        red_card, fouls, total_offside, total_tackle, won_tackle, 
-                        blocked_scoring_att, interception, total_clearance, 
-                        effective_head_clearance, ball_recovery, duel_won, duel_lost, 
-                        won_contest, aerial_won, aerial_lost, error_lead_to_goal, 
-                        saves, penalty_save, punches, good_high_claim, stand_catch_dive_catch, 
-                        total_keeper_sweeper, keeper_throws, goal_kicks
+                            player_name, player_number, player_image, nationality, dob, age, height, position, club_info,
+                            check_if_elem_exists("appearances"),
+                            check_if_elem_exists("goals"),
+                            round(check_if_elem_exists("goals") / check_if_elem_exists("appearances"), 2),
+                            check_if_elem_exists("att_hd_goal"),
+                            check_if_elem_exists("att_rf_goal"),
+                            check_if_elem_exists("att_lf_goal"),
+                            check_if_elem_exists("att_pen_goal"),
+                            check_if_elem_exists("att_freekick_goal"),
+                            check_if_elem_exists("total_scoring_att"),
+                            check_if_elem_exists("ontarget_scoring_att"),
+                            -1.0 if check_if_elem_exists("total_scoring_att") == -1.0 or check_if_elem_exists("ontarget_scoring_att") == -1.0 else (
+                                0.0 if check_if_elem_exists("total_scoring_att") == 0 else round(check_if_elem_exists("ontarget_scoring_att") / check_if_elem_exists("total_scoring_att") * 100.0, 2)),
+                            check_if_elem_exists("hit_woodwork"),
+                            check_if_elem_exists("big_chance_missed"),
+                            check_if_elem_exists('wins'),
+                            check_if_elem_exists('losses'),
+                            check_if_elem_exists("goal_assist"),
+                            check_if_elem_exists("total_pass"),
+                            -1.0 if check_if_elem_exists("appearances") == -1.0 or check_if_elem_exists("total_pass") == -1.0 else round(check_if_elem_exists("total_pass") / check_if_elem_exists("appearances"), 2),
+                            check_if_elem_exists("big_chance_created"),
+                            check_if_elem_exists("total_cross"),
+                            check_if_elem_exists("accurate_crosses"),
+                            check_if_elem_exists('yellow_card'),
+                            check_if_elem_exists('red_card'),
+                            check_if_elem_exists('fouls'),
+                            check_if_elem_exists('total_offside'),
+                            check_if_elem_exists('total_tackle'),
+                            check_if_elem_exists('won_tackle'),
+                            check_if_elem_exists('blocked_scoring_att'),
+                            check_if_elem_exists('interception'),
+                            check_if_elem_exists('total_clearance'),
+                            check_if_elem_exists("effective_head_clearance"),
+                            check_if_elem_exists("ball_recovery"),
+                            check_if_elem_exists("duel_won"),
+                            check_if_elem_exists("duel_lost"),
+                            check_if_elem_exists("won_contest"),
+                            check_if_elem_exists("aerial_won"),
+                            check_if_elem_exists("aerial_lost"),
+                            check_if_elem_exists("error_lead_to_goal"),
+                            check_if_elem_exists("saves"),
+                            check_if_elem_exists("penalty_save"),
+                            check_if_elem_exists("punches"),
+                            check_if_elem_exists('good_high_claim'),
+                            check_if_elem_exists('stand_catch,dive_catch'),
+                            check_if_elem_exists('total_keeper_sweeper'),
+                            check_if_elem_exists('keeper_throws'),
+                            check_if_elem_exists("goal_kicks")
                         ])
                 else: # all time stats were already added, so navigate straight to stats page for season stats
+                    print("all time stats already added for " + player_name)
                     try:
                         WebDriverWait(driver, 10).until(
                         EC.element_to_be_clickable((By.CSS_SELECTOR, "a[data-text='Stats']"))).click()
@@ -293,81 +269,61 @@ def main(season, all_time_stat_path, season_stat_path):
                 dropdown_options_inner.find_element(By.CSS_SELECTOR, option_selector_inner).click()
                 time.sleep(5)
                 # bio
-                current_club = club_info[season]
-                appearances = check_if_elem_exists("appearances")
-                # attack
-                goals = check_if_elem_exists("goals")
-                goals_per_game = round(goals/appearances, 2)
-                att_hd_goal = check_if_elem_exists("att_hd_goal")
-                att_rf_goal = check_if_elem_exists("att_rf_goal")
-                att_lf_goal = check_if_elem_exists("att_lf_goal")
-                att_pen_goal = check_if_elem_exists("att_pen_goal")
-                att_freekick_goal = check_if_elem_exists("att_freekick_goal")
-                total_scoring_att = check_if_elem_exists("total_scoring_att")
-                ontarget_scoring_att = check_if_elem_exists("ontarget_scoring_att")
-                if total_scoring_att == -1.0 or ontarget_scoring_att == -1.0:
-                    ontarget_per = -1.0
-                elif total_scoring_att == 0:
-                    ontarget_per = 0.0
-                else:
-                    ontarget_per = round(ontarget_scoring_att/total_scoring_att * 100.0, 2)
-                hit_woodwork = check_if_elem_exists("hit_woodwork")
-                big_chance_missed = check_if_elem_exists("big_chance_missed")
-                # team stats
-                wins = check_if_elem_exists('wins')
-                losses = check_if_elem_exists('losses')
-                goal_assists = check_if_elem_exists("goal_assist")
-                total_pass = check_if_elem_exists("total_pass")
-                if appearances == -1.0 or total_pass == -1.0:
-                    passes_per_match = -1.0
-                else:
-                    passes_per_match = round(total_pass/appearances, 2)
-                big_chance_created = check_if_elem_exists("big_chance_created")
-                total_cross = check_if_elem_exists("total_cross")
-                cross_accuracy = check_if_elem_exists("accurate_crosses")
-                #discipline
-                yellow_card = check_if_elem_exists('yellow_card')
-                red_card = check_if_elem_exists('red_card')
-                fouls = check_if_elem_exists('fouls')
-                total_offside = check_if_elem_exists('total_offside')
-                #defense
-                total_tackle = check_if_elem_exists('total_tackle')
-                won_tackle = check_if_elem_exists('won_tackle')
-                blocked_scoring_att = check_if_elem_exists('blocked_scoring_att')
-                interception = check_if_elem_exists('interception')
-                total_clearance = check_if_elem_exists('total_clearance')
-                effective_head_clearance = check_if_elem_exists("effective_head_clearance")
-                ball_recovery = check_if_elem_exists("ball_recovery")
-                duel_won = check_if_elem_exists("duel_won")
-                duel_lost = check_if_elem_exists("duel_lost")
-                won_contest = check_if_elem_exists("won_contest")
-                aerial_won = check_if_elem_exists("aerial_won")
-                aerial_lost = check_if_elem_exists("aerial_lost")
-                error_lead_to_goal = check_if_elem_exists("error_lead_to_goal")
-                # goalkeeping
-                saves = check_if_elem_exists("saves")
-                penalty_save = check_if_elem_exists("penalty_save")
-                punches = check_if_elem_exists("punches")
-                good_high_claim = check_if_elem_exists('good_high_claim')
-                stand_catch_dive_catch = check_if_elem_exists('stand_catch,dive_catch')
-                total_keeper_sweeper = check_if_elem_exists('total_keeper_sweeper')
-                keeper_throws = check_if_elem_exists('keeper_throws')
-                goal_kicks = check_if_elem_exists("goal_kicks")
+                try:
+                    current_club = club_info[season]
+                except KeyError:
+                    current_club = "unknown"
                 with open(season_stat_path, mode='a', newline='', encoding='utf-8') as file:
                     season_stat_writer = csv.writer(file)
                     season_stat_writer.writerow([
-                    player_name, current_club,
-                    appearances, goals, goals_per_game, att_hd_goal, 
-                    att_rf_goal, att_lf_goal, att_pen_goal, att_freekick_goal, 
-                    total_scoring_att, ontarget_scoring_att, ontarget_per, 
-                    hit_woodwork, big_chance_missed, wins, losses, goal_assists, total_pass, 
-                    passes_per_match, big_chance_created, total_cross, cross_accuracy, yellow_card, 
-                    red_card, fouls, total_offside, total_tackle, won_tackle, 
-                    blocked_scoring_att, interception, total_clearance, 
-                    effective_head_clearance, ball_recovery, duel_won, duel_lost, 
-                    won_contest, aerial_won, aerial_lost, error_lead_to_goal, 
-                    saves, penalty_save, punches, good_high_claim, stand_catch_dive_catch, 
-                    total_keeper_sweeper, keeper_throws, goal_kicks
+                        player_name, current_club,
+                        check_if_elem_exists("appearances"),
+                        check_if_elem_exists("goals"),
+                        round(check_if_elem_exists("goals") / check_if_elem_exists("appearances"), 2),
+                        check_if_elem_exists("att_hd_goal"),
+                        check_if_elem_exists("att_rf_goal"),
+                        check_if_elem_exists("att_lf_goal"),
+                        check_if_elem_exists("att_pen_goal"),
+                        check_if_elem_exists("att_freekick_goal"),
+                        check_if_elem_exists("total_scoring_att"),
+                        check_if_elem_exists("ontarget_scoring_att"),
+                        -1.0 if check_if_elem_exists("total_scoring_att") == -1.0 or check_if_elem_exists("ontarget_scoring_att") == -1.0 else (
+                            0.0 if check_if_elem_exists("total_scoring_att") == 0 else round(check_if_elem_exists("ontarget_scoring_att") / check_if_elem_exists("total_scoring_att") * 100.0, 2)),
+                        check_if_elem_exists("hit_woodwork"),
+                        check_if_elem_exists("big_chance_missed"),
+                        check_if_elem_exists('wins'),
+                        check_if_elem_exists('losses'),
+                        check_if_elem_exists("goal_assist"),
+                        check_if_elem_exists("total_pass"),
+                        -1.0 if check_if_elem_exists("appearances") == -1.0 or check_if_elem_exists("total_pass") == -1.0 else round(check_if_elem_exists("total_pass") / check_if_elem_exists("appearances"), 2),
+                        check_if_elem_exists("big_chance_created"),
+                        check_if_elem_exists("total_cross"),
+                        check_if_elem_exists("accurate_crosses"),
+                        check_if_elem_exists('yellow_card'),
+                        check_if_elem_exists('red_card'),
+                        check_if_elem_exists('fouls'),
+                        check_if_elem_exists('total_offside'),
+                        check_if_elem_exists('total_tackle'),
+                        check_if_elem_exists('won_tackle'),
+                        check_if_elem_exists('blocked_scoring_att'),
+                        check_if_elem_exists('interception'),
+                        check_if_elem_exists('total_clearance'),
+                        check_if_elem_exists("effective_head_clearance"),
+                        check_if_elem_exists("ball_recovery"),
+                        check_if_elem_exists("duel_won"),
+                        check_if_elem_exists("duel_lost"),
+                        check_if_elem_exists("won_contest"),
+                        check_if_elem_exists("aerial_won"),
+                        check_if_elem_exists("aerial_lost"),
+                        check_if_elem_exists("error_lead_to_goal"),
+                        check_if_elem_exists("saves"),
+                        check_if_elem_exists("penalty_save"),
+                        check_if_elem_exists("punches"),
+                        check_if_elem_exists('good_high_claim'),
+                        check_if_elem_exists('stand_catch,dive_catch'),
+                        check_if_elem_exists('total_keeper_sweeper'),
+                        check_if_elem_exists('keeper_throws'),
+                        check_if_elem_exists("goal_kicks")
                     ])
                 driver.close()
                 #print("closed tab")
