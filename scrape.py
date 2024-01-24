@@ -1,3 +1,5 @@
+import os
+import sys
 import time
 import csv
 import selenium
@@ -16,208 +18,350 @@ chromedriver_path = "C:\Program Files (x86)\chromedriver.exe"
 chrome_service = Service(executable_path=chromedriver_path)
 driver = webdriver.Chrome(service=chrome_service)
 search = "https://www.premierleague.com/stats/top/players/appearances"
-driver.get(search)
 
-
-# steps:
-# 1. Select a season on the dropdown in the player stats homepage
-# 2. Loop through all of the player names for each season, and click the next arrow to view more players from a season
-# 3. Open player name in new tab
-# 4. Get player's name, appearance, number, nationality, image, dob, age, height if we've not scraped this player before
-# 5. Click on stats link to get player stats
-# 6. Get player's all time stats if we've not scraped this player before
-# 7. Click on dropdown and select the current season - every time
-# 8. Get player's stats for this season - every time
-
-
-# write scraped results to a csv
-player_stat_path = "data/player_stats.csv"
-season_stat_path = "data/season_stats.csv"
-
-player_stat_header = [
-    "Player Name", "Player Number", "Image", "Nationality", "Date of Birth", 
-    "Age", "Height (cm)"#, "Honors & Awards" 
-]
-
-season_stat_header = [
-    "Player Name", "Current Season", "Appearances", "Goals", "Goals Per Game", "Headed Goals", 
+# won tackles, ball recovery, cross accuracy, duels won, duels lost, won contest, aerial won, aerial lost, error leading to goal
+all_time_stat_header = [
+    "Player Name", "Player Number", "Image",
+    "Nationality", "Date of Birth", 
+    "Age", "Height (cm)","Position", "Clubs", "Appearances", "Goals", "Goals Per Match", "Headed Goals", 
     "Right Foot Goals", "Left Foot Goals", "Penalty Goals", "Free Kick Goals", 
-    "Total Scoring Attempts", "On Target Scoring Attempts", "Shot Accuracy", 
-    "Hit Woodwork", "Big Chances Missed", "Goal Assists", "Total Passes", 
-    "Passes Per Match", "Big Chances Created", "Total Cross", "Yellow Cards", 
-    "Red Cards", "Fouls", "Total Offside", "Total Tackle", "Won Tackle", 
-    "Blocked Scoring Attempts", "Interceptions", "Total Clearance", 
+    "Shots", "On Target Shots", "Shot Accuracy", 
+    "Hit Woodwork", "Big Chances Missed", "Wins", "Losses", "Goal Assists", "Total Passes", 
+    "Passes Per Match", "Big Chances Created", "Total Cross", "Cross Accuracy", "Yellow Cards", 
+    "Red Cards", "Fouls", "Total Offside", "Total Tackles", "Tackles Won", 
+    "Blocked Shots", "Interceptions", "Total Clearances", 
     "Effective Head Clearance", "Ball Recovery", "Duel Won", "Duel Lost", 
     "Won Contest", "Aerial Won", "Aerial Lost", "Error Leading To Goal",
     "Saves", "Penalties Saved", "Punches", "High Claims", "Catches", "Sweeper Clearances", "Throw Outs", "Goal Kicks"
 ]
 
-# start with season 2006/07
-def get_seasons():
-    seasons = []
-    for year in range(2006, 2024):
-        start_year = str(year).zfill(4)  # convert to 4-digit format
-        end_year = str(year + 1).zfill(4)
-        season = f"{start_year}/{end_year[2:]}"  # e.g., 2006/07
-        seasons.append(season)
-    return seasons
+season_stat_header = [
+    "Player Name", "Current Club", "Appearances", "Goals", "Goals Per Match", "Headed Goals", 
+    "Right Foot Goals", "Left Foot Goals", "Penalty Goals", "Free Kick Goals", 
+    "Shots", "On Target Shots", "Shot Accuracy", 
+    "Hit Woodwork", "Big Chances Missed", "Wins", "Losses", "Goal Assists", "Total Passes", 
+    "Passes Per Match", "Big Chances Created", "Total Cross", "Cross Accuracy", "Yellow Cards", 
+    "Red Cards", "Fouls", "Total Offside", "Total Tackles", "Tackles Won", 
+    "Blocked Shots", "Interceptions", "Total Clearances", 
+    "Effective Head Clearance", "Ball Recovery", "Duel Won", "Duel Lost", 
+    "Won Contest", "Aerial Won", "Aerial Lost", "Error Leading To Goal",
+    "Saves", "Penalties Saved", "Punches", "High Claims", "Catches", "Sweeper Clearances", "Throw Outs", "Goal Kicks"
+]
 
-def main():
+def remove_comma_percent(s):
+    s = s.replace("%", "")
+    s = s.replace(",", "")
+    return s
+
+def check_if_elem_exists(identification):
+    try:
+        return float(remove_comma_percent(driver.find_element(By.CSS_SELECTOR, "span[data-stat='%s']" % identification).text))
+    except NoSuchElementException:
+        return -1.0
+    
+def write_header(path, header):
+    with open(path, mode='w', newline='', encoding='utf-8') as file:
+        csv.writer(file).writerow(header)  # Write the header
+
+# steps:
+# 1. Select a season on the dropdown in the player stats homepage
+# 2. Loop through all of the player names for each season, and click the next arrow to view more players from a season
+# 3. Open player name in new tab
+# 4. Get player's name, appearance, number, nationality, image, dob, age, height, and all time stats if we've not scraped this player before
+# 5. Click on stats link to get player stats
+# 6. Get player's all time stats if we've not scraped this player before
+# 7. Click on dropdown and select the current season - every time
+# 8. Get player's stats for this season - every time
+def main(season, all_time_stat_path, season_stat_path):
+    driver.get(search)
+    # get the existing players in all time stats so we don't add players there twice
+    existing_all_time_player_names = []
+    existing_season_player_names = []
+    if os.path.isfile(all_time_stat_path):
+        with open(all_time_stat_path, mode='r', newline='', encoding='utf-8') as file:
+            all_time_stat_reader = csv.reader(file)
+            existing_all_time_player_names = {row[0] for row in all_time_stat_reader}
+    if os.path.isfile(season_stat_path):
+        with open(season_stat_path, mode='r', newline='', encoding='utf-8') as file:
+            season_stat_reader = csv.reader(file)
+            existing_season_player_names = {row[0] for row in season_stat_reader}
+    # if there are no players, then we don't even have a header, so add the header
+    if len(existing_all_time_player_names) == 0:
+        write_header(all_time_stat_path, all_time_stat_header)
+    if len(existing_season_player_names) == 0:
+        write_header(season_stat_path, season_stat_header)
     # click on accept cookies button: onetrust-accept-btn-handler
     try:
         driver.find_element(By.ID, "onetrust-accept-btn-handler").click()
     except:
-        print("Cookies not asked for")
+        print("Cookie permissions not asked for")
     try:
         driver.find_element(By.ID, "advertClose").click()
     except:
         print("Ad not shown")
-
+    time.sleep(5)
     # Find the dropdown element by its class name and click on it to open the options
     dropdown_element = driver.find_elements(By.CLASS_NAME, 'current')[1]
     # Find all elements with class name 'dropdownList' and get the second one
     dropdown_list = driver.find_elements(By.CLASS_NAME, 'dropdownList')[1]
-    seasons = get_seasons()
-    players = []
-    for season in seasons:
+    time.sleep(3)
+    # click on dropdown
+    dropdown_element.click()
+    # wait for the second dropdown options to be visible
+    dropdown_options = WebDriverWait(driver, 10).until(
+        EC.visibility_of(dropdown_list)
+    )
+    # click on option
+    time.sleep(3)
+    option_selector = f"li[data-option-name*='{season}']"
+    dropdown_options.find_element(By.CSS_SELECTOR, option_selector).click()
+    flag = True
+    while flag:
         time.sleep(3)
-        # click on dropdown
-        dropdown_element.click()
-        # wait for the second dropdown options to be visible
-        dropdown_options = WebDriverWait(driver, 10).until(
-            EC.visibility_of(dropdown_list)
-        )
-        # click on option
-        time.sleep(3)
-        option_selector = f"li[data-option-name*='{season}']"
-        dropdown_options.find_element(By.CSS_SELECTOR, option_selector).click()
-        flag = True
-        while flag:
-            time.sleep(3)
-            player_names = driver.find_elements(By.CLASS_NAME, "playerName")
-            print("found player names")
-            for i in range(len(player_names)):
+        players = driver.find_elements(By.CLASS_NAME, "playerName")
+        for i in range(len(players)):
+            player_name = players[i].text
+            if player_name in existing_all_time_player_names and player_name in existing_season_player_names: # already added in boths csvs, skip
+                print(player_name + " already exists in both csvs, skipping...")
+            else: # need to add player in at least season stats csv, maybe need to add in all time if they're not already in all time csv
+                # CLICK ON PLAYER NAME
                 time.sleep(3) 
-                
                 #open in a new tab
-                player_names[i].send_keys(Keys.CONTROL + Keys.RETURN)
-                print("opened new tab")
+                players[i].send_keys(Keys.CONTROL + Keys.RETURN)
+                #print("opened new tab")
                 driver.switch_to.window(driver.window_handles[1])
-                print("switched tabs")
+                #print("switched tabs")
                 # make sure window is maximized
                 driver.maximize_window()
                 time.sleep(3)
-
-                player_name = driver.find_element(By.CLASS_NAME, "player-header__name-first").text + driver.find_element(By.CLASS_NAME, "player-header__name-last").text
-                if player_name not in players:
-                    players.append(player_name)
+                if player_name not in existing_all_time_player_names: # get all time stats from overview and stats page
+                    print("adding all time stats for " + player_name)
                     try:
                         player_number = driver.find_element(By.CSS_SELECTOR, "div[class='player-header__player-number player-header__player-number--large']").text
                     except:
                         player_number = -1
-                    player_image = driver.find_element(By.CSS_SELECTOR, "img[data-widget='player-image']").get_attribute("src")
-                    bar = driver.find_elements(By.CLASS_NAME, "player-info__info")
-                    nationality = driver.find_element(By.CLASS_NAME, "player-info__player-country").text
-                    print(nationality)
-                    dob = bar[1].text
-                    split_parts = dob.split(" (")
-                    dob = split_parts[0]
-                    age = split_parts[1][:-1]
-                    print(dob, age)
-                    height = bar[2].text[:3]
-                    print(height)
-
-                    with open(player_stat_path, mode='w', newline='', encoding='utf-8') as file:
-                        player_stat_writer = csv.writer(file)
-                        player_stat_writer.writerow(player_stat_header)  # Write the header
-                        player_stat_writer.writerow([
-                            player_name, player_number, player_image, nationality, dob, age, height
+                    try:
+                        player_image = driver.find_element(By.CSS_SELECTOR, "img[data-widget='player-image']").get_attribute("src")
+                    except NoSuchElementException:
+                        player_image = "https://resources.premierleague.com/premierleague/photos/players/250x250/Photo-Missing.png"
+                    try:
+                        nationality = driver.find_element(By.CLASS_NAME, "player-info__player-country").text
+                    except NoSuchElementException:
+                        nationality = "unknown"
+                    try:
+                        bar = driver.find_elements(By.CLASS_NAME, "player-info__info")
+                        dob = bar[1].text
+                        split_parts = dob.split(" (")
+                        dob = split_parts[0]
+                        today = datetime.today()
+                        dob_date = datetime.strptime(dob, "%d/%m/%Y")
+                        age = int(today.year - dob_date.year - ((today.month, today.day) < (dob_date.month, dob_date.day)))
+                    except:
+                        dob = -1
+                        age = -1
+                    try:
+                        height = bar[2].text[:3]
+                    except:
+                        height = -1
+                    positions = ["Goalkeeper", "Defender", "Midfielder", "Forward"]
+                    blocks = driver.find_elements(By.CLASS_NAME, "player-overview__info")
+                    position = "-1"
+                    for block in blocks:
+                        if block.text in positions:
+                            position = block.text
+                            break
+                    club_seasons = driver.find_elements(By.CLASS_NAME, "player-club-history__season") # start from index 1
+                    club_names = driver.find_elements(By.CSS_SELECTOR, "span[class='player-club-history__team-name player-club-history__team-name--long']")
+                    club_info = {}
+                    for i in range(len(club_names)):
+                        club_season = club_seasons[i+1].text
+                        # Creating the desired format '2005/06'
+                        club_season = f"{club_season[:4]}/{club_season[-2:]}"
+                        name = club_names[i].text
+                        club_info[club_season] = name
+                    time.sleep(3)    
+                    try:
+                        WebDriverWait(driver, 10).until(
+                        EC.element_to_be_clickable((By.CSS_SELECTOR, "a[data-text='Stats']"))).click()
+                    except TimeoutException:
+                        driver.close()
+                        driver.switch_to.window(driver.window_handles[0])
+                        time.sleep(5) 
+                        continue
+                    time.sleep(5)
+                    # SCRAPING ALL TIME STATS
+                    # bio
+                    appearances = check_if_elem_exists("appearances")
+                    # attack
+                    goals = check_if_elem_exists("goals")
+                    goals_per_game = round(goals/appearances, 2)
+                    att_hd_goal = check_if_elem_exists("att_hd_goal")
+                    att_rf_goal = check_if_elem_exists("att_rf_goal")
+                    att_lf_goal = check_if_elem_exists("att_lf_goal")
+                    att_pen_goal = check_if_elem_exists("att_pen_goal")
+                    att_freekick_goal = check_if_elem_exists("att_freekick_goal")
+                    total_scoring_att = check_if_elem_exists("total_scoring_att")
+                    ontarget_scoring_att = check_if_elem_exists("ontarget_scoring_att")
+                    if total_scoring_att == -1.0 or ontarget_scoring_att == -1.0:
+                        ontarget_per = -1.0
+                    elif total_scoring_att == 0:
+                        ontarget_per = 0.0
+                    else:
+                        ontarget_per = round(ontarget_scoring_att/total_scoring_att * 100.0, 2)
+                    hit_woodwork = check_if_elem_exists("hit_woodwork")
+                    big_chance_missed = check_if_elem_exists("big_chance_missed")
+                    # team stats
+                    wins = check_if_elem_exists('wins')
+                    losses = check_if_elem_exists('losses')
+                    goal_assists = check_if_elem_exists("goal_assist")
+                    total_pass = check_if_elem_exists("total_pass")
+                    if appearances == -1.0 or total_pass == -1.0:
+                        passes_per_match = -1.0
+                    else:
+                        passes_per_match = round(total_pass/appearances, 2)
+                    big_chance_created = check_if_elem_exists("big_chance_created")
+                    total_cross = check_if_elem_exists("total_cross")
+                    cross_accuracy = check_if_elem_exists("accurate_crosses")
+                    #discipline
+                    yellow_card = check_if_elem_exists('yellow_card')
+                    red_card = check_if_elem_exists('red_card')
+                    fouls = check_if_elem_exists('fouls')
+                    total_offside = check_if_elem_exists('total_offside')
+                    #defense
+                    total_tackle = check_if_elem_exists('total_tackle')
+                    won_tackle = check_if_elem_exists('won_tackle')
+                    blocked_scoring_att = check_if_elem_exists('blocked_scoring_att')
+                    interception = check_if_elem_exists('interception')
+                    total_clearance = check_if_elem_exists('total_clearance')
+                    effective_head_clearance = check_if_elem_exists("effective_head_clearance")
+                    ball_recovery = check_if_elem_exists("ball_recovery")
+                    duel_won = check_if_elem_exists("duel_won")
+                    duel_lost = check_if_elem_exists("duel_lost")
+                    won_contest = check_if_elem_exists("won_contest")
+                    aerial_won = check_if_elem_exists("aerial_won")
+                    aerial_lost = check_if_elem_exists("aerial_lost")
+                    error_lead_to_goal = check_if_elem_exists("error_lead_to_goal")
+                    # goalkeeping
+                    saves = check_if_elem_exists("saves")
+                    penalty_save = check_if_elem_exists("penalty_save")
+                    punches = check_if_elem_exists("punches")
+                    good_high_claim = check_if_elem_exists('good_high_claim')
+                    stand_catch_dive_catch = check_if_elem_exists('stand_catch,dive_catch')
+                    total_keeper_sweeper = check_if_elem_exists('total_keeper_sweeper')
+                    keeper_throws = check_if_elem_exists('keeper_throws')
+                    goal_kicks = check_if_elem_exists("goal_kicks")
+                    with open(all_time_stat_path, mode='a', newline='', encoding='utf-8') as file:
+                        all_time_stat_writer = csv.writer(file)
+                        all_time_stat_writer.writerow([
+                        player_name, player_number, player_image, 
+                        nationality, dob, age, height, position, club_info,
+                        appearances, goals, goals_per_game, att_hd_goal, 
+                        att_rf_goal, att_lf_goal, att_pen_goal, att_freekick_goal, 
+                        total_scoring_att, ontarget_scoring_att, ontarget_per, 
+                        hit_woodwork, big_chance_missed, wins, losses, goal_assists, total_pass, 
+                        passes_per_match, big_chance_created, total_cross, cross_accuracy, yellow_card, 
+                        red_card, fouls, total_offside, total_tackle, won_tackle, 
+                        blocked_scoring_att, interception, total_clearance, 
+                        effective_head_clearance, ball_recovery, duel_won, duel_lost, 
+                        won_contest, aerial_won, aerial_lost, error_lead_to_goal, 
+                        saves, penalty_save, punches, good_high_claim, stand_catch_dive_catch, 
+                        total_keeper_sweeper, keeper_throws, goal_kicks
                         ])
-
-                time.sleep(3)    
-                WebDriverWait(driver, 10).until(
-                    EC.element_to_be_clickable((By.CSS_SELECTOR, "a[data-text='Stats']"))).click()
+                else: # all time stats were already added, so navigate straight to stats page for season stats
+                    try:
+                        WebDriverWait(driver, 10).until(
+                        EC.element_to_be_clickable((By.CSS_SELECTOR, "a[data-text='Stats']"))).click()
+                    except TimeoutException:
+                        driver.close()
+                        driver.switch_to.window(driver.window_handles[0])
+                        time.sleep(5) 
+                        continue
+                    time.sleep(5)
+                print("adding season stats for " + player_name)
+                # ADD SEASON STATS
+                dropdown_element_inner = driver.find_elements(By.CLASS_NAME, 'current')[1]
+                # Find all elements with class name 'dropdownList' and get the second one
+                dropdown_list_inner = driver.find_elements(By.CLASS_NAME, 'dropdownList')[1]
+                dropdown_element_inner.click()
+                # wait for the second dropdown options to be visible
+                dropdown_options_inner = WebDriverWait(driver, 10).until(
+                    EC.visibility_of(dropdown_list_inner)
+                )
+                # click on option
+                time.sleep(3)
+                option_selector_inner = f"li[data-option-name*='{season}']"
+                dropdown_options_inner.find_element(By.CSS_SELECTOR, option_selector_inner).click()
                 time.sleep(5)
-                # SCRAPING STATS
                 # bio
-                player_name = driver.find_element(By.CLASS_NAME, "player-header__name-first").text + driver.find_element(By.CLASS_NAME, "player-header__name-last").text
-                appearances = int(driver.find_element(By.CSS_SELECTOR, "span[data-stat='appearances']").text)
-                print("scraped bio")
+                current_club = club_info[season]
+                appearances = check_if_elem_exists("appearances")
                 # attack
-                goals = int(driver.find_element(By.CSS_SELECTOR, "span[data-stat='goals']").text)
+                goals = check_if_elem_exists("goals")
                 goals_per_game = round(goals/appearances, 2)
-                att_hd_goal = int(driver.find_element(By.CSS_SELECTOR, "span[data-stat='att_hd_goal']").text)
-                att_rf_goal = int(driver.find_element(By.CSS_SELECTOR, "span[data-stat='att_rf_goal']").text)
-                att_lf_goal = int(driver.find_element(By.CSS_SELECTOR, "span[data-stat='att_lf_goal']").text)
-                att_pen_goal = int(driver.find_element(By.CSS_SELECTOR, "span[data-stat='att_pen_goal']").text)
-                att_freekick_goal = int(driver.find_element(By.CSS_SELECTOR, "span[data-stat='att_freekick_goal']").text)
-                total_scoring_att = int(driver.find_element(By.CSS_SELECTOR, "span[data-stat='total_scoring_att']").text)
-                ontarget_scoring_att = int(driver.find_element(By.CSS_SELECTOR, "span[data-stat='ontarget_scoring_att']").text)
-                total_scoring_att = float(driver.find_element(By.CSS_SELECTOR, "span[data-stat='total_scoring_att']").text)
-                hit_woodwork = int(driver.find_element(By.CSS_SELECTOR, "span[data-stat='hit_woodwork']").text)
-                big_chance_missed = int(driver.find_element(By.CSS_SELECTOR, "span[data-stat='big_chance_missed']").text)
-                print("scraped attack")
+                att_hd_goal = check_if_elem_exists("att_hd_goal")
+                att_rf_goal = check_if_elem_exists("att_rf_goal")
+                att_lf_goal = check_if_elem_exists("att_lf_goal")
+                att_pen_goal = check_if_elem_exists("att_pen_goal")
+                att_freekick_goal = check_if_elem_exists("att_freekick_goal")
+                total_scoring_att = check_if_elem_exists("total_scoring_att")
+                ontarget_scoring_att = check_if_elem_exists("ontarget_scoring_att")
+                if total_scoring_att == -1.0 or ontarget_scoring_att == -1.0:
+                    ontarget_per = -1.0
+                elif total_scoring_att == 0:
+                    ontarget_per = 0.0
+                else:
+                    ontarget_per = round(ontarget_scoring_att/total_scoring_att * 100.0, 2)
+                hit_woodwork = check_if_elem_exists("hit_woodwork")
+                big_chance_missed = check_if_elem_exists("big_chance_missed")
                 # team stats
-                goal_assists = int(driver.find_element(By.CSS_SELECTOR, "span[data-stat='goal_assists']").text)
-                total_pass = int(driver.find_element(By.CSS_SELECTOR, "span[data-stat='total_pass']").text)
-                passes_per_match = round(appearances/total_pass, 2)
-                big_chance_created = int(driver.find_element(By.CSS_SELECTOR, "span[data-stat='big_chance_created']").text)
-                total_cross = int(driver.find_element(By.CSS_SELECTOR, "span[data-stat='total_cross']").text)
-                print("team stats")
+                wins = check_if_elem_exists('wins')
+                losses = check_if_elem_exists('losses')
+                goal_assists = check_if_elem_exists("goal_assist")
+                total_pass = check_if_elem_exists("total_pass")
+                if appearances == -1.0 or total_pass == -1.0:
+                    passes_per_match = -1.0
+                else:
+                    passes_per_match = round(total_pass/appearances, 2)
+                big_chance_created = check_if_elem_exists("big_chance_created")
+                total_cross = check_if_elem_exists("total_cross")
+                cross_accuracy = check_if_elem_exists("accurate_crosses")
                 #discipline
-                yellow_card = int(driver.find_element(By.CSS_SELECTOR, "span[data-stat='yellow_card']").text)
-                red_card = int(driver.find_element(By.CSS_SELECTOR, "span[data-stat='red_card']").text)
-                fouls = int(driver.find_element(By.CSS_SELECTOR, "span[data-stat='fouls']").text)
-                total_offside = int(driver.find_element(By.CSS_SELECTOR, "span[data-stat='total_offside']").text)
-                print("discipline")
+                yellow_card = check_if_elem_exists('yellow_card')
+                red_card = check_if_elem_exists('red_card')
+                fouls = check_if_elem_exists('fouls')
+                total_offside = check_if_elem_exists('total_offside')
                 #defense
-                total_tackle = int(driver.find_element(By.CSS_SELECTOR, "span[data-stat='total_tackle']").text)
-                try:
-                    won_tackle = float(driver.find_element(By.CSS_SELECTOR, "span[data-stat='won_tackle']").text)
-                except:
-                    won_tackle = -1.0
-                blocked_scoring_att = int(driver.find_element(By.CSS_SELECTOR, "span[data-stat='blocked_scoring_att']").text)
-                interception = int(driver.find_element(By.CSS_SELECTOR, "span[data-stat='interception']").text)
-                total_clearance = int(driver.find_element(By.CSS_SELECTOR, "span[data-stat='total_clearance']").text)
-                effective_head_clearance = int(driver.find_element(By.CSS_SELECTOR, "span[data-stat='effective_head_clearance']").text)
-                ball_recovery = int(driver.find_element(By.CSS_SELECTOR, "span[data-stat='ball_recovery']").text)
-                duel_won = int(driver.find_element(By.CSS_SELECTOR, "span[data-stat='duel_won']").text)
-                duel_lost = int(driver.find_element(By.CSS_SELECTOR, "span[data-stat='duel_lost']").text)
-                won_contest = int(driver.find_element(By.CSS_SELECTOR, "span[data-stat='won_contest']").text)
-                aerial_won = int(driver.find_element(By.CSS_SELECTOR, "span[data-stat='aerial_won']").text)
-                aerial_lost = int(driver.find_element(By.CSS_SELECTOR, "span[data-stat='aerial_lost']").text)
-                error_lead_to_goal = int(driver.find_element(By.CSS_SELECTOR, "span[data-stat='error_lead_to_goal']").text)
-                print("defense")
+                total_tackle = check_if_elem_exists('total_tackle')
+                won_tackle = check_if_elem_exists('won_tackle')
+                blocked_scoring_att = check_if_elem_exists('blocked_scoring_att')
+                interception = check_if_elem_exists('interception')
+                total_clearance = check_if_elem_exists('total_clearance')
+                effective_head_clearance = check_if_elem_exists("effective_head_clearance")
+                ball_recovery = check_if_elem_exists("ball_recovery")
+                duel_won = check_if_elem_exists("duel_won")
+                duel_lost = check_if_elem_exists("duel_lost")
+                won_contest = check_if_elem_exists("won_contest")
+                aerial_won = check_if_elem_exists("aerial_won")
+                aerial_lost = check_if_elem_exists("aerial_lost")
+                error_lead_to_goal = check_if_elem_exists("error_lead_to_goal")
                 # goalkeeping
-                try:
-                    saves = int(driver.find_element(By.CSS_SELECTOR, "span[data-stat='saves']").text)
-                    penalty_save = int(driver.find_element(By.CSS_SELECTOR, "span[data-stat='penalty_save']").text)
-                    punches = int(driver.find_element(By.CSS_SELECTOR, "span[data-stat='punches']").text)
-                    good_high_claim = int(driver.find_element(By.CSS_SELECTOR, "span[data-stat='good_high_claim']").text)
-                    stand_catch_dive_catch = int(driver.find_element(By.CSS_SELECTOR, "span[data-stat='stand_catch,dive_catch']").text)
-                    total_keeper_sweeper = int(driver.find_element(By.CSS_SELECTOR, "span[data-stat='total_keeper_sweeper']").text)
-                    keeper_throws = int(driver.find_element(By.CSS_SELECTOR, "span[data-stat='keeper_throws']").text)
-                    goal_kicks = int(driver.find_element(By.CSS_SELECTOR, "span[data-stat='goal_kicks']").text)
-                except NoSuchElementException:
-                    saves = -1
-                    penalty_save = -1
-                    punches = -1
-                    good_high_claim = -1
-                    stand_catch_dive_catch = -1
-                    total_keeper_sweeper = -1
-                    keeper_throws = -1
-                    goal_kicks = -1
-                
-                print("goalkeeping")
-                with open(season_stat_path, mode='w', newline='', encoding='utf-8') as file:
+                saves = check_if_elem_exists("saves")
+                penalty_save = check_if_elem_exists("penalty_save")
+                punches = check_if_elem_exists("punches")
+                good_high_claim = check_if_elem_exists('good_high_claim')
+                stand_catch_dive_catch = check_if_elem_exists('stand_catch,dive_catch')
+                total_keeper_sweeper = check_if_elem_exists('total_keeper_sweeper')
+                keeper_throws = check_if_elem_exists('keeper_throws')
+                goal_kicks = check_if_elem_exists("goal_kicks")
+                with open(season_stat_path, mode='a', newline='', encoding='utf-8') as file:
                     season_stat_writer = csv.writer(file)
-                    season_stat_writer.writerow(season_stat_header)  # Write the header
                     season_stat_writer.writerow([
-                    player_name, season, appearances, goals, goals_per_game, att_hd_goal, 
+                    player_name, current_club,
+                    appearances, goals, goals_per_game, att_hd_goal, 
                     att_rf_goal, att_lf_goal, att_pen_goal, att_freekick_goal, 
-                    total_scoring_att, ontarget_scoring_att, total_scoring_att, 
-                    hit_woodwork, big_chance_missed, goal_assists, total_pass, 
-                    passes_per_match, big_chance_created, total_cross, yellow_card, 
+                    total_scoring_att, ontarget_scoring_att, ontarget_per, 
+                    hit_woodwork, big_chance_missed, wins, losses, goal_assists, total_pass, 
+                    passes_per_match, big_chance_created, total_cross, cross_accuracy, yellow_card, 
                     red_card, fouls, total_offside, total_tackle, won_tackle, 
                     blocked_scoring_att, interception, total_clearance, 
                     effective_head_clearance, ball_recovery, duel_won, duel_lost, 
@@ -225,19 +369,25 @@ def main():
                     saves, penalty_save, punches, good_high_claim, stand_catch_dive_catch, 
                     total_keeper_sweeper, keeper_throws, goal_kicks
                     ])
-
                 driver.close()
-                print("closed tab")
+                #print("closed tab")
                 driver.switch_to.window(driver.window_handles[0])
-                print("switched to home")
-            time.sleep(5)
-            try:
-                driver.find_element(By.CSS_SELECTOR, "div[class='paginationBtn paginationNextContainer']").click()
-            except NoSuchElementException:
-                flag = False
-            time.sleep(5)
-        print("got to the end")
-        time.sleep(10)
+                #print("switched to home")
+                time.sleep(5) 
+        try:
+            driver.find_element(By.CSS_SELECTOR, "div[class='paginationBtn paginationNextContainer']").click()
+            print("moving to next search result page")
+        except NoSuchElementException:
+            flag = False
+        time.sleep(5)
+    print("finished scraping season")
+    time.sleep(10)
 
 if __name__ == '__main__':
-        main()
+    if len(sys.argv) != 4:
+        print("Usage: python scrape.py <season> <all_time_stats_path> <season_stat_path>")
+        sys.exit(1)
+    arg1 = sys.argv[1]
+    arg2 = sys.argv[2]
+    arg3 = sys.argv[3]
+    main(arg1, arg2, arg3)
