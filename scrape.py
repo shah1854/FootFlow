@@ -247,7 +247,7 @@ def main(season, all_time_stat_path, season_stat_path):
                     try:
                         WebDriverWait(driver, 10).until(
                         EC.element_to_be_clickable((By.CSS_SELECTOR, "a[data-text='Stats']"))).click()
-                    except TimeoutException:
+                    except:
                         driver.close()
                         driver.switch_to.window(driver.window_handles[0])
                         time.sleep(5) 
@@ -260,9 +260,15 @@ def main(season, all_time_stat_path, season_stat_path):
                 dropdown_list_inner = driver.find_elements(By.CLASS_NAME, 'dropdownList')[1]
                 dropdown_element_inner.click()
                 # wait for the second dropdown options to be visible
-                dropdown_options_inner = WebDriverWait(driver, 10).until(
-                    EC.visibility_of(dropdown_list_inner)
-                )
+                try:
+                    dropdown_options_inner = WebDriverWait(driver, 10).until(
+                        EC.visibility_of(dropdown_list_inner)
+                    )
+                except TimeoutException:
+                    driver.close()
+                    driver.switch_to.window(driver.window_handles[0])
+                    time.sleep(5) 
+                    continue
                 # click on option
                 time.sleep(3)
                 option_selector_inner = f"li[data-option-name*='{season}']"
