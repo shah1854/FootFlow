@@ -254,13 +254,13 @@ def main(season, all_time_stat_path, season_stat_path):
                         continue
                     time.sleep(5)
                 print("adding season stats for " + player_name)
-                # ADD SEASON STATS
-                dropdown_element_inner = driver.find_elements(By.CLASS_NAME, 'current')[1]
-                # Find all elements with class name 'dropdownList' and get the second one
-                dropdown_list_inner = driver.find_elements(By.CLASS_NAME, 'dropdownList')[1]
-                dropdown_element_inner.click()
-                # wait for the second dropdown options to be visible
                 try:
+                    # ADD SEASON STATS
+                    dropdown_element_inner = driver.find_elements(By.CLASS_NAME, 'current')[1]
+                    # Find all elements with class name 'dropdownList' and get the second one
+                    dropdown_list_inner = driver.find_elements(By.CLASS_NAME, 'dropdownList')[1]
+                    dropdown_element_inner.click()
+                    # wait for the second dropdown options to be visible
                     dropdown_options_inner = WebDriverWait(driver, 10).until(
                         EC.visibility_of(dropdown_list_inner)
                     )
